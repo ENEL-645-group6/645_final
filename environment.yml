@@ -1,11 +1,10 @@
-name: brain_tumor_torch
+name: brain_tumor_torch_Mac
 channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.8
-  - tensorflow=2.10
-  - keras
+  - python=3.10
+  - pip
   - numpy
   - pandas
   - matplotlib
@@ -13,4 +12,8 @@ dependencies:
   - pillow
   - opencv
   - nibabel
-  - tqdm 
+  - tqdm
+  - pip:
+    - torch
+    - torchvision
+    - torchaudio
