@@ -1,0 +1,20 @@
+name: brain_tumor_cuda_windows_only
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - pandas
+  - matplotlib
+  - scikit-learn
+  - pillow=9.3.0
+  - opencv
+  - nibabel
+  - tqdm
+  - pip:
+    - --index-url https://download.pytorch.org/whl/cu118
+    - torch
+    - torchvision
+    - torchaudio

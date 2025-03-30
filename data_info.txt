@@ -1,0 +1,21 @@
+Data Organization:
+1. What is the directory structure of your image data?
+   - data/Brain Tumor CT scan Images/Healthy
+   - data/Brain Tumor CT scan Images/Tumor
+2. Are the images already split into training/validation sets?
+    - Not yet.
+3. What is the format of your images (e.g., .jpg, .png, DICOM)?
+    - .jpg
+4. What are the dimensions of your images?
+    - They are different sizes. I saw 352x511, 245 x 284, 640 x 640, and etc.
+For the tumor images:
+1. Do you have segmentation masks (binary masks showing tumor locations)?
+    - No
+2. If not, do you need both classification (tumor/no tumor) and segmentation, or just classification?
+    - I need both classification (tumor/no tumor) and segmentation.
+Dataset details:
+1. How many images do you have in total?
+    - 2301 in data/Brain Tumor CT scan Images/Healthy
+    - 2319 in data/Brain Tumor CT scan Images/Tumor
+2. What's the approximate split between healthy and tumor cases?
+    - about 50% healthy, 50% tumor
