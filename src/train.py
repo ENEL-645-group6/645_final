@@ -44,7 +44,9 @@ class BrainTumorDataset(Dataset):
         if self.labels[idx] == 1:  # tumor case
             seg_mask = torch.ones((1, 256, 256)) * 0.5
             
-        return img, seg_mask, torch.tensor(self.labels[idx], dtype=torch.float32)
+        label = torch.tensor([self.labels[idx]], dtype=torch.float32)  # Add [] to make it 1D
+        
+        return img, seg_mask, label
 
 def calculate_metrics(outputs, targets, threshold=0.5):
     # For segmentation
@@ -65,156 +67,177 @@ def train_model(processed_data_dir, model_save_dir, batch_size=8, epochs=50):
         device = torch.device('mps')
     else:
         device = torch.device('cpu')
-    print(f"Using device: {device}")
+    print(f"\nTraining Setup:")
+    print(f"- Using device: {device}")
     
-    # Create model save directory
-    os.makedirs(model_save_dir, exist_ok=True)
-    
-    # Data transforms
-    transform = transforms.Compose([
-        transforms.Resize((256, 256)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-    
-    # Create datasets
-    train_dataset = BrainTumorDataset(processed_data_dir, 'train', transform)
-    val_dataset = BrainTumorDataset(processed_data_dir, 'val', transform)
-    
-    # Create data loaders
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
-    
-    # Create model
-    model = get_model(device)
-    
-    # Define loss functions and optimizer
-    seg_criterion = nn.BCELoss()
-    class_criterion = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters())
-    
-    # Training loop
-    best_val_loss = float('inf')
-    best_val_seg_acc = 0
-    best_val_class_acc = 0
-    patience = 10
-    patience_counter_loss = 0
-    patience_counter_seg = 0
-    patience_counter_class = 0
-    
-    for epoch in range(epochs):
-        model.train()
-        train_loss = 0
-        train_seg_loss = 0
-        train_class_loss = 0
-        train_seg_acc = 0
-        train_class_acc = 0
+    try:
+        # Create model with explicit device
+        model = get_model(device)
+        print("- Model initialized successfully")
         
-        # Training
-        for images, seg_masks, labels in tqdm(train_loader, desc=f'Epoch {epoch+1}/{epochs}'):
-            images = images.to(device)
-            seg_masks = seg_masks.to(device)
-            labels = labels.to(device)
-            
-            optimizer.zero_grad()
-            seg_output, class_output = model(images)
-            
-            # Calculate losses
-            seg_loss = seg_criterion(seg_output, seg_masks)
-            class_loss = class_criterion(class_output.squeeze(), labels)
-            loss = seg_loss + 0.5 * class_loss
-            
-            loss.backward()
-            optimizer.step()
-            
-            # Calculate accuracies
-            seg_acc, class_acc = calculate_metrics((seg_output, class_output), (seg_masks, labels))
-            
-            train_loss += loss.item()
-            train_seg_loss += seg_loss.item()
-            train_class_loss += class_loss.item()
-            train_seg_acc += seg_acc
-            train_class_acc += class_acc
+        # Create directories
+        os.makedirs(model_save_dir, exist_ok=True)
+        print("- Directories created")
         
-        # Validation
-        model.eval()
-        val_loss = 0
-        val_seg_loss = 0
-        val_class_loss = 0
-        val_seg_acc = 0
-        val_class_acc = 0
+        # Define loss functions and optimizer
+        seg_criterion = nn.BCELoss().to(device)
+        class_criterion = nn.BCELoss().to(device)
+        optimizer = optim.Adam(model.parameters())
+        print("- Loss functions and optimizer created")
         
-        with torch.no_grad():
-            for images, seg_masks, labels in val_loader:
+        # Create datasets
+        transform = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+        
+        train_dataset = BrainTumorDataset(processed_data_dir, 'train', transform)
+        val_dataset = BrainTumorDataset(processed_data_dir, 'val', transform)
+        print("- Datasets created")
+        
+        # Create data loaders
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+        print("- Data loaders created")
+        
+        # Test first batch
+        print("\nTesting first batch:")
+        images, seg_masks, labels = next(iter(train_loader))
+        print(f"- Image batch device: {images.device}, shape: {images.shape}")
+        images = images.to(device)
+        print(f"- Image batch moved to device: {images.device}")
+        
+        # Training loop
+        best_val_loss = float('inf')
+        best_val_seg_acc = 0
+        best_val_class_acc = 0
+        patience = 10
+        patience_counter_loss = 0
+        patience_counter_seg = 0
+        patience_counter_class = 0
+        
+        for epoch in range(epochs):
+            model.train()
+            train_loss = 0
+            train_seg_loss = 0
+            train_class_loss = 0
+            train_seg_acc = 0
+            train_class_acc = 0
+            
+            # Training
+            for images, seg_masks, labels in tqdm(train_loader, desc=f'Epoch {epoch+1}/{epochs}'):
                 images = images.to(device)
                 seg_masks = seg_masks.to(device)
-                labels = labels.to(device)
+                labels = labels.view(-1).to(device)
                 
+                optimizer.zero_grad()
                 seg_output, class_output = model(images)
                 
+                class_output = class_output.view(-1)
+                
                 seg_loss = seg_criterion(seg_output, seg_masks)
-                class_loss = class_criterion(class_output.squeeze(), labels)
+                class_loss = class_criterion(class_output, labels)
                 loss = seg_loss + 0.5 * class_loss
+                
+                loss.backward()
+                optimizer.step()
                 
                 # Calculate accuracies
                 seg_acc, class_acc = calculate_metrics((seg_output, class_output), (seg_masks, labels))
                 
-                val_loss += loss.item()
-                val_seg_loss += seg_loss.item()
-                val_class_loss += class_loss.item()
-                val_seg_acc += seg_acc
-                val_class_acc += class_acc
-        
-        # Calculate average metrics
-        val_loss = val_loss/len(val_loader)
-        val_seg_acc = val_seg_acc/len(val_loader)
-        val_class_acc = val_class_acc/len(val_loader)
-        
-        # Print metrics
-        print(f"\nEpoch {epoch+1}/{epochs}")
-        print(f"Train Loss: {train_loss/len(train_loader):.4f}")
-        print(f"Train Seg Loss: {train_seg_loss/len(train_loader):.4f}")
-        print(f"Train Class Loss: {train_class_loss/len(train_loader):.4f}")
-        print(f"Train Seg Acc: {train_seg_acc/len(train_loader):.4f}")
-        print(f"Train Class Acc: {train_class_acc/len(train_loader):.4f}")
-        print(f"Val Loss: {val_loss:.4f}")
-        print(f"Val Seg Loss: {val_seg_loss/len(val_loader):.4f}")
-        print(f"Val Class Loss: {val_class_loss/len(val_loader):.4f}")
-        print(f"Val Seg Acc: {val_seg_acc:.4f}")
-        print(f"Val Class Acc: {val_class_acc:.4f}")
-        
-        # Save models based on different metrics
-        # 1. Best combined loss model
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            patience_counter_loss = 0
-            torch.save(model.state_dict(), os.path.join(model_save_dir, 'best_model_loss.pth'))
-        else:
-            patience_counter_loss += 1
+                train_loss += loss.item()
+                train_seg_loss += seg_loss.item()
+                train_class_loss += class_loss.item()
+                train_seg_acc += seg_acc
+                train_class_acc += class_acc
             
-        # 2. Best segmentation accuracy model
-        if val_seg_acc > best_val_seg_acc:
-            best_val_seg_acc = val_seg_acc
-            patience_counter_seg = 0
-            torch.save(model.state_dict(), os.path.join(model_save_dir, 'best_model_seg.pth'))
-        else:
-            patience_counter_seg += 1
+            # Validation
+            model.eval()
+            val_loss = 0
+            val_seg_loss = 0
+            val_class_loss = 0
+            val_seg_acc = 0
+            val_class_acc = 0
             
-        # 3. Best classification accuracy model
-        if val_class_acc > best_val_class_acc:
-            best_val_class_acc = val_class_acc
-            patience_counter_class = 0
-            torch.save(model.state_dict(), os.path.join(model_save_dir, 'best_model_class.pth'))
-        else:
-            patience_counter_class += 1
+            with torch.no_grad():
+                for images, seg_masks, labels in val_loader:
+                    images = images.to(device)
+                    seg_masks = seg_masks.to(device)
+                    labels = labels.view(-1).to(device)
+                    
+                    seg_output, class_output = model(images)
+                    class_output = class_output.view(-1)
+                    
+                    seg_loss = seg_criterion(seg_output, seg_masks)
+                    class_loss = class_criterion(class_output, labels)
+                    loss = seg_loss + 0.5 * class_loss
+                    
+                    # Calculate accuracies
+                    seg_acc, class_acc = calculate_metrics((seg_output, class_output), (seg_masks, labels))
+                    
+                    val_loss += loss.item()
+                    val_seg_loss += seg_loss.item()
+                    val_class_loss += class_loss.item()
+                    val_seg_acc += seg_acc
+                    val_class_acc += class_acc
+            
+            # Calculate average metrics
+            val_loss = val_loss/len(val_loader)
+            val_seg_acc = val_seg_acc/len(val_loader)
+            val_class_acc = val_class_acc/len(val_loader)
+            
+            # Print metrics
+            print(f"\nEpoch {epoch+1}/{epochs}")
+            print(f"Train Loss: {train_loss/len(train_loader):.4f}")
+            print(f"Train Seg Loss: {train_seg_loss/len(train_loader):.4f}")
+            print(f"Train Class Loss: {train_class_loss/len(train_loader):.4f}")
+            print(f"Train Seg Acc: {train_seg_acc/len(train_loader):.4f}")
+            print(f"Train Class Acc: {train_class_acc/len(train_loader):.4f}")
+            print(f"Val Loss: {val_loss:.4f}")
+            print(f"Val Seg Loss: {val_seg_loss/len(val_loader):.4f}")
+            print(f"Val Class Loss: {val_class_loss/len(val_loader):.4f}")
+            print(f"Val Seg Acc: {val_seg_acc:.4f}")
+            print(f"Val Class Acc: {val_class_acc:.4f}")
+            
+            # Save models based on different metrics
+            # 1. Best combined loss model
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                patience_counter_loss = 0
+                torch.save(model.state_dict(), os.path.join(model_save_dir, 'best_model_loss.pth'))
+            else:
+                patience_counter_loss += 1
+            
+            # 2. Best segmentation accuracy model
+            if val_seg_acc > best_val_seg_acc:
+                best_val_seg_acc = val_seg_acc
+                patience_counter_seg = 0
+                torch.save(model.state_dict(), os.path.join(model_save_dir, 'best_model_seg.pth'))
+            else:
+                patience_counter_seg += 1
+            
+            # 3. Best classification accuracy model
+            if val_class_acc > best_val_class_acc:
+                best_val_class_acc = val_class_acc
+                patience_counter_class = 0
+                torch.save(model.state_dict(), os.path.join(model_save_dir, 'best_model_class.pth'))
+            else:
+                patience_counter_class += 1
+            
+            # Early stopping if all metrics stop improving
+            if patience_counter_loss >= patience and patience_counter_seg >= patience and patience_counter_class >= patience:
+                print(f"Early stopping triggered after {epoch+1} epochs")
+                print(f"Best validation loss: {best_val_loss:.4f}")
+                print(f"Best validation segmentation accuracy: {best_val_seg_acc:.4f}")
+                print(f"Best validation classification accuracy: {best_val_class_acc:.4f}")
+                break
         
-        # Early stopping if all metrics stop improving
-        if patience_counter_loss >= patience and patience_counter_seg >= patience and patience_counter_class >= patience:
-            print(f"Early stopping triggered after {epoch+1} epochs")
-            print(f"Best validation loss: {best_val_loss:.4f}")
-            print(f"Best validation segmentation accuracy: {best_val_seg_acc:.4f}")
-            print(f"Best validation classification accuracy: {best_val_class_acc:.4f}")
-            break
+    except Exception as e:
+        print(f"\nError during setup: {str(e)}")
+        raise
+
+    # Rest of the code remains the same...
 
 if __name__ == "__main__":
     # Set up paths
