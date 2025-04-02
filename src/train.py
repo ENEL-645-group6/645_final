@@ -237,7 +237,6 @@ def train_model(processed_data_dir, model_save_dir, batch_size=8, epochs=50):
         print(f"\nError during setup: {str(e)}")
         raise
 
-    # Rest of the code remains the same...
 
 if __name__ == "__main__":
     # Set up paths
