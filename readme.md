@@ -1,19 +1,39 @@
-# Brain Tumor Detection and Segmentation
+# Brain Tumor Detection
 
-This project implements a deep learning solution for brain tumor detection and segmentation using CT scan images. The model combines a UNet architecture for segmentation with a classification branch for tumor detection.
+| Group \#: 6      |     |
+| --------------   | --- |
+| Student Names:   |     |
+|Warisa Khaophong  |     |
+|Frank Ma          |     |
+|Cory Wu           |     |
+|Rick Zhang        |     |
+
+Please focus on brain_tumor_unet.ipynb for the implementation.
+
+This project implements a deep learning solution for brain tumor detection using CT scan images. The model combines a UNet architecture for segmentation with a classification branch for tumor detection.
 
 ## Project Structure
 
+To run the project, please extract 645_data.zip into the cloned repository.
+
+The structure of the repository after adding the data is as follows:
+
 ```
 brain_tumor/
+├── Dataset/
 ├── data/
 │   ├── Brain Tumor CT scan Images/
 │   │   ├── Healthy/
 │   │   └── Tumor/
 │   └── processed_data/
-│       ├── train/
-│       ├── val/
-│       └── test/
+│   |    ├── train/
+│   |    ├── val/
+│   |    └── test/
+|   └── models/checkpoints/
+|        └── logs/
+|   └── segmentation_example/BraTS2020_Training_028/
+|    
+|
 ├── src/
 │   ├── data_preprocessing.py
 │   ├── model.py
@@ -112,7 +132,7 @@ python src/train.py
 
 ## Performance
 
-- Training time: ~2.5 minutes per epoch on RTX 4060
+- Training time: ~2.5 minutes per epoch on RTX 4060 or 7 minutes per epoch on Apple M1 MPS
 - Multi-metric early stopping
 - Saves three specialized model checkpoints
 - Optimized for both segmentation and classification tasks
